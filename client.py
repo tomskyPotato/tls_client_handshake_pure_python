@@ -13,6 +13,83 @@ from print_colors import bcolors
 from extensions import Extension, ApplicationLayerProtocolNegotiationExtension as ALPN
 from cryptography.hazmat.primitives.hashes import SHA256
 
+def print_hex_bytes(label, data):
+	print(f"{label} ({len(data)} bytes):")
+	hex_str = ":".join(f"{b:02X}" for b in data)
+	for i in range(0, len(hex_str), 96):  # Zeilenweise Ausgabe
+		print("    " + hex_str[i:i+96])
+
+from collections import OrderedDict
+
+def parse_client_hello(data: bytes) -> dict:
+    pos = 0
+    parsed = OrderedDict()
+
+    # Record Layer
+    content_type = data[pos]
+    version = data[pos + 1:pos + 3]
+    length = int.from_bytes(data[pos + 3:pos + 5], 'big')
+    parsed["Record"] = {
+        "Content Type": f"{content_type:#02x}",
+        "Version": f"{version.hex()}",
+        "Length": length
+    }
+    pos += 5
+
+    # Handshake Layer
+    handshake_type = data[pos]
+    handshake_length = int.from_bytes(data[pos + 1:pos + 4], 'big')
+    client_version = data[pos + 4:pos + 6]
+    random = data[pos + 6:pos + 38]
+    session_id_length = data[pos + 38]
+    pos += 39
+    session_id = data[pos:pos + session_id_length]
+    pos += session_id_length
+
+    # Cipher Suites
+    cipher_len = int.from_bytes(data[pos:pos + 2], 'big')
+    pos += 2
+    cipher_suites = [
+        f"{data[i]:02X}:{data[i+1]:02X}"
+        for i in range(pos, pos + cipher_len, 2)
+    ]
+    pos += cipher_len
+
+    # Compression Methods
+    compression_len = data[pos]
+    pos += 1
+    compression_methods = list(data[pos:pos + compression_len])
+    pos += compression_len
+
+    # Extensions
+    extensions_length = int.from_bytes(data[pos:pos + 2], 'big')
+    pos += 2
+    extensions_end = pos + extensions_length
+    extensions = []
+
+    while pos < extensions_end:
+        ext_type = int.from_bytes(data[pos:pos + 2], 'big')
+        ext_len = int.from_bytes(data[pos + 2:pos + 4], 'big')
+        ext_data = data[pos + 4:pos + 4 + ext_len]
+        extensions.append({
+            "Type": f"{ext_type:#04x}",
+            "Length": ext_len,
+            "Data": ext_data.hex()
+        })
+        pos += 4 + ext_len
+
+    parsed["Handshake"] = {
+        "Handshake Type": f"{handshake_type:#02x}",
+        "Length": handshake_length,
+        "Client Version": client_version.hex(),
+        "Random": random.hex(),
+        "Session ID": session_id.hex(),
+        "Cipher Suites": cipher_suites,
+        "Compression Methods": compression_methods,
+        "Extensions": extensions
+    }
+
+    return parsed
 
 def print_hex(b):
     return ':'.join('{:02X}'.format(a) for a in b)
@@ -44,7 +121,7 @@ class Client:
         self.session_id = b''
         # @todo reuse session_id if possible here
         # self.session_id = bytes.fromhex('bc8f2d2cfb470c8b372d1eb937740dfa51e881d50d03237065b6fcf002513daf')
-        ciphers = ciphers if isinstance(ciphers, collections.Iterable) else tuple(ciphers)
+        ciphers = ciphers if isinstance(ciphers, collections.abc.Iterable) else tuple(ciphers)
         self.ciphers = tuple(CIPHER_SUITES[cipher] for cipher in ciphers if cipher in CIPHER_SUITES)
         self.extensions = extensions
         self.messages = []
@@ -97,6 +174,12 @@ class Client:
                                        )
 
         message = self.record(constants.CONTENT_TYPE_HANDSHAKE, client_hello_bytes, tls_version=tls.TLSV1())
+        #Debug einschub
+        print_hex_bytes("ClientHello", message)
+        parsed = parse_client_hello(message)
+        import pprint
+        pprint.pprint(parsed, sort_dicts=False)
+        # debug ende
         self.conn.send(message)
         self.messages.append(client_hello_bytes)
         self.debug_print('Host', self.host)

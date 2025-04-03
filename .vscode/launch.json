@@ -1,0 +1,13 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Python: index.py mit Argumenten",
+            "type": "python",
+            "request": "launch",
+            "program": "${workspaceFolder}/index.py",
+            "args": ["www.google.de"],
+            "console": "integratedTerminal"
+        }
+    ]
+}
