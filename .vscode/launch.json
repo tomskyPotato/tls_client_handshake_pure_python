@@ -3,10 +3,12 @@
     "configurations": [
         {
             "name": "Python: index.py mit Argumenten",
-            "type": "python",
+            "type": "debugpy",
             "request": "launch",
             "program": "${workspaceFolder}/index.py",
-            "args": ["www.google.de"],
+            "args": [
+                "www.google.de"
+            ],
             "console": "integratedTerminal"
         }
     ]
